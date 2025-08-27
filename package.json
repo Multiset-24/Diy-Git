@@ -1,0 +1,15 @@
+{
+    "name": "DiyGit",
+    "version": "1.0.0",
+    "description": "Basic version of git",
+    "main": "main.js",
+    "scripts": {
+        "dev": "node app/main.js"
+    },
+    "keywords": [
+        "build-your-own-git"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {}
+}
