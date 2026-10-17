@@ -1,42 +1,25 @@
-const path = require("path");
 const fs = require("fs");
-const zlib = require("zlib");
-const crypto = require("crypto");
+const { GitError } = require("../errors");
+const { hashObject, writeObject } = require("../objects");
 
-class hashObjectCommand {
-  constructor(flag, filePath) {
-    this.flag = flag;
-    this.filePath = filePath;
+// hash-object [-w] <file>
+// Prints the blob SHA of a file. With -w, also stores it in .git/objects.
+class HashObjectCommand {
+  constructor(args) {
+    this.write = args.includes("-w");
+    const files = args.filter((a) => !a.startsWith("-"));
+    const unknown = args.filter((a) => a.startsWith("-") && a !== "-w");
+    if (unknown.length) throw new GitError(`unknown option ${unknown[0]}`);
+    if (files.length !== 1) throw new GitError("usage: hash-object [-w] <file>");
+    this.file = files[0];
   }
 
-  execute() {
-    const { flag, filePath } = this;
-    //now we need to get the total file path -> get content-> make data to be store-> hash it
-    const resolvedFilePath = path.resolve(filePath);
-    if (!fs.existsSync(resolvedFilePath)) {
-      throw new Error(`File ${filePath} does not exist.`);
-    }
-    const content = fs.readFileSync(resolvedFilePath);
-
-    const header = Buffer.from(`blob ${content.length}\0`);
-    const blob = Buffer.concat([header, content]);
-    const hash = crypto.createHash("sha1").update(blob).digest("hex");
-    process.stdout.write(hash + "\n");
-    // console.log(hash);
-    // now we need to create the object file
-    const objectDirectory = path.join(
-      process.cwd(),
-      ".git",
-      "objects",
-      hash.slice(0, 2)
-    );
-    const objectFile = path.join(objectDirectory, hash.slice(2));
-
-    if (flag) {
-      fs.mkdirSync(objectDirectory, { recursive: true });
-      fs.writeFileSync(objectFile, zlib.deflateSync(blob));
-    }
+  execute({ out, repo }) {
+    if (!fs.existsSync(this.file)) throw new GitError(`could not open '${this.file}'`);
+    const content = fs.readFileSync(this.file);
+    const sha = this.write ? writeObject(repo().gitDir, "blob", content) : hashObject("blob", content);
+    out(sha + "\n");
   }
 }
 
-module.exports = hashObjectCommand;
+module.exports = HashObjectCommand;
