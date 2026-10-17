@@ -1,64 +1,43 @@
-const fs = require('fs');
-const path = require('path');
-const zlib = require('zlib');
-const crypto = require('crypto');
+const { GitError } = require("../errors");
+const { readObject, writeObject } = require("../objects");
+const { resolve } = require("../refs");
+const { signature } = require("../signature");
 
+// commit-tree <tree> [-p <parent>]... -m <message>
+// Creates a commit object and prints its SHA. Does not move any branch.
 class CommitTreeCommand {
-  constructor(tree, parent, message) {
-    this.treeSHA = tree;
-    this.parentSHA = parent;
-    this.message = message;
-    this.gitDir = path.join(process.cwd(), '.git');
-    this.author = 'mytv dor <mytvdor@gmail.com>';
-  }
-
-  _nowSeconds() {
-    return Math.floor(Date.now() / 1000);
-  }
-
-  _objectPath(sha) {
-    return path.join(this.gitDir, 'objects', sha.slice(0, 2), sha.slice(2));
-  }
-
-  _ensureObjectDir(hash) {
-    fs.mkdirSync(path.join(this.gitDir, 'objects', hash.slice(0, 2)), { recursive: true });
-  }
-
-  _sha1(buffer) {
-    const h = crypto.createHash('sha1');
-    h.update(buffer);
-    return h.digest('hex');
-  }
-
-  execute() {
-    try {
-      if (!fs.existsSync(this.gitDir)) {
-        console.error(`.git directory not found in ${process.cwd()}`);
-        return;
-      }
-
-      const parts = [];
-      parts.push(`tree ${this.treeSHA}\n`);
-      if (this.parentSHA) parts.push(`parent ${this.parentSHA}\n`);
-      const ts = this._nowSeconds();
-      parts.push(`author ${this.author} ${ts} +0000\n`);
-      parts.push(`committer ${this.author} ${ts} +0000\n\n`);
-      parts.push(`${this.message}\n`);
-
-      const commitContentBuffer = Buffer.from(parts.join(''));
-      const header = `commit ${commitContentBuffer.length}\0`;
-      const data = Buffer.concat([Buffer.from(header), commitContentBuffer]);
-
-      const hash = this._sha1(data);
-
-      this._ensureObjectDir(hash);
-      const compressedData = zlib.deflateSync(data);
-      fs.writeFileSync(this._objectPath(hash), compressedData);
-      process.stdout.write(hash);
-    } catch (err) {
-      console.error(`Error: ${err.message}`);
+  constructor(args) {
+    this.parents = [];
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === "-p") this.parents.push(args[++i]);
+      else if (args[i] === "-m") this.message = args[++i];
+      else if (!this.tree) this.tree = args[i];
+      else throw new GitError(`unexpected argument ${args[i]}`);
     }
+    if (!this.tree || this.message === undefined || this.parents.includes(undefined)) {
+      throw new GitError("usage: commit-tree <tree> [-p <parent>]... -m <message>");
+    }
+  }
+
+  execute({ out, repo }) {
+    const { gitDir } = repo();
+    out(createCommit(gitDir, this.tree, this.parents, this.message) + "\n");
   }
 }
 
+function createCommit(gitDir, treeName, parentNames, message) {
+  const tree = resolve(gitDir, treeName);
+  if (readObject(gitDir, tree).type !== "tree") throw new GitError(`${treeName} is not a tree`);
+  const lines = [`tree ${tree}`];
+  for (const name of parentNames) {
+    const parent = resolve(gitDir, name);
+    if (readObject(gitDir, parent).type !== "commit") throw new GitError(`${name} is not a commit`);
+    lines.push(`parent ${parent}`);
+  }
+  lines.push(`author ${signature("AUTHOR")}`, `committer ${signature("COMMITTER")}`);
+  const body = message.endsWith("\n") ? message : message + "\n";
+  return writeObject(gitDir, "commit", Buffer.from(lines.join("\n") + "\n\n" + body));
+}
+
 module.exports = CommitTreeCommand;
+module.exports.createCommit = createCommit;

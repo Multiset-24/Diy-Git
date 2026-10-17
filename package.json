@@ -1,15 +1,21 @@
 {
-    "name": "DiyGit",
-    "version": "1.0.0",
-    "description": "Basic version of git",
-    "main": "main.js",
-    "scripts": {
-        "dev": "node app/main.js"
-    },
-    "keywords": [
-        "build-your-own-git"
-    ],
-    "author": "",
-    "license": "MIT",
-    "dependencies": {}
+  "name": "diy-git",
+  "version": "2.0.0",
+  "description": "Git's object model built from scratch in Node.js, compatible with real git",
+  "main": "app/main.js",
+  "bin": {
+    "diy-git": "app/main.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "git",
+    "build-your-own-git"
+  ],
+  "author": "Saurav Chaurasiya",
+  "license": "MIT"
 }
